@@ -1,16 +1,14 @@
 package com.mrebollob.mvi.presentation.posts
 
 import android.os.Bundle
-import android.widget.Toast
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.mrebollob.mvi.R
-import com.mrebollob.mvi.domain.extension.gone
-import com.mrebollob.mvi.domain.extension.viewModel
-import com.mrebollob.mvi.domain.extension.visible
+import com.mrebollob.mvi.domain.extension.*
 import com.mrebollob.mvi.platform.BaseActivity
 import com.mrebollob.mvi.platform.mvibase.MviView
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.subjects.PublishSubject
 import kotlinx.android.synthetic.main.activity_posts.*
 import kotlinx.android.synthetic.main.content_posts.*
 
@@ -18,6 +16,7 @@ class PostsActivity : BaseActivity(), MviView<PostsIntent, PostsViewState> {
 
 
     private val adapter = PostAdapter(mutableListOf())
+    private val getAuthorInfoIntentPublisher = PublishSubject.create<PostsIntent.GetAuthorInfoIntent>()
     private val disposables = CompositeDisposable()
 
     private lateinit var postsViewModel: PostsViewModel
@@ -46,10 +45,14 @@ class PostsActivity : BaseActivity(), MviView<PostsIntent, PostsViewState> {
     private fun bind() {
         disposables.add(postsViewModel.states().subscribe(this::render))
         postsViewModel.processIntents(intents())
+        adapter.setOnPostClicked { getAuthorInfoIntentPublisher.onNext(PostsIntent.GetAuthorInfoIntent(it.userId)) }
     }
 
     override fun intents(): Observable<PostsIntent> {
-        return loadIntent()
+        return Observable.merge(
+            loadIntent(),
+            authorIntent()
+        )
     }
 
     override fun render(state: PostsViewState) {
@@ -69,12 +72,21 @@ class PostsActivity : BaseActivity(), MviView<PostsIntent, PostsViewState> {
             }
         }
 
+        if (state.selectedAuthor.isValid()) {
+            postsRecyclerView.snack(getString(R.string.author_info_text, state.selectedAuthor.name))
+        }
+
         if (state.error != null) {
-            Toast.makeText(this, getString(R.string.error_loading_posts), Toast.LENGTH_SHORT).show()
+            toast(getString(R.string.error_loading_posts))
         }
     }
 
     private fun loadIntent(): Observable<PostsIntent> {
         return Observable.just(PostsIntent.LoadPostsIntent)
     }
+
+    private fun authorIntent(): Observable<PostsIntent.GetAuthorInfoIntent> {
+        return getAuthorInfoIntentPublisher
+    }
+
 }

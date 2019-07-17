@@ -2,6 +2,7 @@ package com.mrebollob.mvi.presentation.posts
 
 import com.mrebollob.mvi.domain.repository.PostRepository
 import com.mrebollob.mvi.platform.schedulers.BaseSchedulerProvider
+import io.reactivex.Observable
 import io.reactivex.ObservableTransformer
 
 class PostsProcessorHolder(
@@ -22,6 +23,37 @@ class PostsProcessorHolder(
             }
         }
 
-    // TODO Check this!!!
-    internal var actionProcessor = loadAllPostsProcessor as ObservableTransformer<PostsAction, PostsResult>
+    private val getAuthorInfoProcessor =
+        ObservableTransformer<PostsAction.GetAuthorInfoAction, PostsResult.GetAuthorInfoResult> { actions ->
+            actions.flatMap {
+                postRepository.getAuthorInfo(it.id)
+                    .map { author -> PostsResult.GetAuthorInfoResult.Success(author) }
+                    .cast(PostsResult.GetAuthorInfoResult::class.java)
+                    .onErrorReturn(PostsResult.GetAuthorInfoResult::Failure)
+                    .subscribeOn(schedulerProvider.io())
+                    .observeOn(schedulerProvider.ui())
+                    .startWith(PostsResult.GetAuthorInfoResult.Loading)
+            }
+        }
+
+    internal var actionProcessor =
+        ObservableTransformer<PostsAction, PostsResult> { actions ->
+            actions.publish { shared ->
+                Observable.merge(
+                    shared.ofType(PostsAction.LoadAllPostsAction::class.java).compose(loadAllPostsProcessor),
+                    shared.ofType(PostsAction.GetAuthorInfoAction::class.java).compose(getAuthorInfoProcessor)
+                )
+                    .mergeWith(
+                        // Error for not implemented actions
+                        shared.filter { v ->
+                            v !is PostsAction.LoadAllPostsAction
+                                    && v !is PostsAction.GetAuthorInfoAction
+                        }.flatMap { w ->
+                            Observable.error<PostsResult>(
+                                IllegalArgumentException("Unknown Action type: $w")
+                            )
+                        }
+                    )
+            }
+        }
 }

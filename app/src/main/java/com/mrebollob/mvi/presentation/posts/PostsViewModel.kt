@@ -1,8 +1,8 @@
 package com.mrebollob.mvi.presentation.posts
 
 import androidx.lifecycle.ViewModel
-import com.mrebollob.mvi.platform.mvibase.MviViewModel
 import com.mrebollob.mvi.domain.extension.notOfType
+import com.mrebollob.mvi.platform.mvibase.MviViewModel
 import io.reactivex.Observable
 import io.reactivex.ObservableTransformer
 import io.reactivex.functions.BiFunction
@@ -46,6 +46,7 @@ class PostsViewModel @Inject constructor(
     private fun actionFromIntent(intent: PostsIntent): PostsAction {
         return when (intent) {
             is PostsIntent.LoadPostsIntent -> PostsAction.LoadAllPostsAction
+            is PostsIntent.GetAuthorInfoIntent -> PostsAction.GetAuthorInfoAction(intent.id)
         }
     }
 
@@ -61,6 +62,16 @@ class PostsViewModel @Inject constructor(
                         error = result.error
                     )
                     is PostsResult.LoadAllPostsResult.Loading -> previousState.copy(isLoading = true)
+                }
+                is PostsResult.GetAuthorInfoResult -> when (result) {
+                    is PostsResult.GetAuthorInfoResult.Success -> {
+                        previousState.copy(isLoading = false, selectedAuthor = result.author)
+                    }
+                    is PostsResult.GetAuthorInfoResult.Failure -> previousState.copy(
+                        isLoading = false,
+                        error = result.error
+                    )
+                    is PostsResult.GetAuthorInfoResult.Loading -> previousState.copy(isLoading = true)
                 }
             }
         }
